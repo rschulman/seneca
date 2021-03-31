@@ -1,0 +1,17 @@
+[package]
+name = "seneca"
+version = "0.1.0"
+authors = ["Ross Schulman <ross@rbs.io>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "*"
+notmuch = "*"
+home = "0.5.3"
+itertools = "0.10.0"
+
+[dependencies.druid]
+git = "https://github.com/linebender/druid.git"
+features = ["im"]
