@@ -11,6 +11,7 @@ chrono = "*"
 notmuch = "*"
 home = "0.5.3"
 itertools = "0.10.0"
+mailparse = "0.13.2"
 
 [dependencies.druid]
 git = "https://github.com/linebender/druid.git"
