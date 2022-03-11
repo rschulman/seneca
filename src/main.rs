@@ -1,103 +1,157 @@
-use chrono::{NaiveDateTime, Utc};
-use druid::im::{vector, Vector};
-use druid::widget::prelude::*;
-use druid::widget::{ClipBox, CrossAxisAlignment, Flex, Label, LensWrap, List, Scroll, WidgetExt};
-use druid::{lens, AppLauncher, Color, Data, Lens, UnitPoint, WindowDesc};
-use home::home_dir;
-use itertools::Itertools;
-use notmuch::{Database, DatabaseMode};
+use std::sync::Arc;
+use std::thread;
 
-//mod mail;
+use chrono::NaiveDateTime;
+use druid::im::{vector, Vector};
+use druid::widget::{Split, prelude::*};
+use druid::widget::{
+    Container, CrossAxisAlignment, Either, Flex, Label, LineBreaking, List, Padding, Scroll,
+    SizedBox, WidgetExt,
+};
+use druid::{
+    AppDelegate, AppLauncher, ArcStr, Color, Command, Data, DelegateCtx, FontDescriptor, Handled,
+    Key, Lens, Selector, Target, WindowDesc,
+};
+
+mod mail;
+mod ui;
+
+use crate::mail::{Email, Thread};
+
+const MY_CUSTOM_FONT: Key<FontDescriptor> = Key::new("org.linebender.example.my-custom-font");
+const SEARCH_CHANGE: Selector<ArcStr> = Selector::new("search_change");
+const BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.background-color");
+const BORDER_COLOR: Key<Color> = Key::new("org.westwork.seneca.border-color");
+const SEARCH_BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.search-background-color");
 
 #[derive(Data, Lens, Clone)]
-struct MailData {
-    emails: Vector<Mail>,
+pub struct MailData {
+    threads: Vector<Thread>,
+    searches: Searches,
+    done_loading: bool,
 }
 
-#[derive(Clone, Data)]
-struct Mail {
-    sender: String,
-    recipients: Vector<String>,
-    date: String,
-    subject: String,
-    body: String,
+#[derive(Data, Lens, Clone)]
+pub struct Searches {
+    search_list: Vector<(ArcStr, ArcStr)>,
+    selected: ArcStr,
+}
+
+struct Delegate;
+
+impl AppDelegate<MailData> for Delegate {
+    fn command(
+        &mut self,
+        ctx: &mut DelegateCtx,
+        _target: Target,
+        cmd: &Command,
+        data: &mut MailData,
+        _env: &Env,
+    ) -> Handled {
+        if let Some(query) = cmd.get(SEARCH_CHANGE) {
+            data.done_loading = false;
+            let event_sink = ctx.get_external_handle();
+            let query_clone = query.clone();
+            let _detached_thread = thread::spawn(|| mail::load_mail(query_clone, event_sink));
+            Handled::Yes
+        } else {
+            Handled::No
+        }
+    }
 }
 
 fn main() {
-    let mut mail_path = home_dir().unwrap();
-    mail_path.push("Personal");
-    mail_path.push(".mail");
-    let db = Database::open(
-        &"/home/ross/Personal/.mail/".to_string(),
-        DatabaseMode::ReadWrite,
-    )
-    .unwrap();
-    let inbox = db.create_query("tag:inbox").unwrap();
-    let threads = inbox.search_threads().unwrap();
-
-    let mut search_mail = MailData {
-        emails: Vector::new(),
+    let search_mail = MailData {
+        threads: Vector::new(),
+        searches: Searches {
+            search_list: vector![
+                (Arc::from("Inbox"), Arc::from("tag:inbox")),
+                (Arc::from("Github"), Arc::from("tag:github"))
+            ],
+            selected: Arc::from("tag:inbox"),
+        },
+        done_loading: false,
     };
 
-    for thread in threads {
-        search_mail.emails.push_back(Mail {
-            sender: thread.authors().iter().join(","),
-            recipients: Vector::new(),
-            date: NaiveDateTime::from_timestamp(thread.newest_date(), 0)
-                .format("%Y-%m-%d %H:%M:%S")
-                .to_string(),
-            subject: thread.subject().into(),
-            body: "".to_string(),
-        })
-    }
-
-    let main_window = WindowDesc::new(root_widget(&search_mail.emails))
+    let main_window = WindowDesc::new(root_widget())
         .title("Seneca")
-        .window_size((400.0, 400.0));
+        .window_size((1000.0, 500.0));
 
-    //let mail_state = check_mail("tag: inbox");
-    AppLauncher::with_window(main_window)
+    let launcher = AppLauncher::with_window(main_window);
+    let event_sink = launcher.get_external_handle();
+
+    thread::spawn(move || mail::load_mail(Arc::from("tag:inbox"), event_sink));
+
+    launcher
         .log_to_console()
+        .delegate(Delegate {})
+        .configure_env(|env: &mut Env, _app: &MailData| {
+            env.set(BACKGROUND_COLOR, Color::grey(0.95));
+            env.set(BORDER_COLOR, Color::WHITE);
+            env.set(SEARCH_BACKGROUND_COLOR, Color::rgb8(55, 65, 64));
+        })
         .launch(search_mail)
         .expect("Failed to launch Seneca");
 }
 
-fn root_widget(mails: &Vector<Mail>) -> impl Widget<MailData> {
-    for mail in mails {}
-    Flex::column()
-        .cross_axis_alignment(CrossAxisAlignment::Start)
-        .with_flex_child(
-            LensWrap::new(
-                Scroll::new(
-                    List::new(|| {
-                        Flex::row()
-                            .with_child(
-                                Label::new(|mail: &Mail, _env: &Env| mail.date.to_string())
-                                    .with_text_color(Color::BLACK)
-                                    .fix_width(160.),
-                            )
-                            .with_default_spacer()
-                            .with_child(ClipBox::new(
-                                Label::new(|mail: &Mail, _env: &Env| mail.sender.to_string())
-                                    .with_text_color(Color::BLACK)
-                                    .fix_width(300.),
-                            ))
-                            .with_default_spacer()
-                            .with_flex_child(
-                                Label::new(|mail: &Mail, _env: &Env| mail.subject.to_string())
-                                    .with_text_color(Color::BLACK),
-                                1.0,
-                            )
-                            .must_fill_main_axis(true)
-                            .background(Color::WHITE)
-                    })
-                    .with_spacing(4.),
-                )
-                .vertical(),
-                lens!(MailData, emails),
-            ),
-            1.0,
-        )
-        .background(Color::grey(0.75))
-        .padding(10.0)
+fn root_widget() -> impl Widget<MailData> {
+    let search_sidebar = ui::search_list::search_sidebar();
+    let thread_widget = ui::thread_list::thread_list();
+    let loading_widget = Label::new("Loading...").center();
+
+    Split::columns(Container::new(Scroll::new(search_sidebar).vertical())
+                .background(SEARCH_BACKGROUND_COLOR),
+            Either::new(
+                |data, _env| data.done_loading,
+                thread_widget,
+                loading_widget,
+            )).split_point(0.2).bar_size(2.0)
+}
+
+fn mail_layout() -> impl Widget<Thread> {
+    Scroll::new(
+        List::new(|| {
+            Flex::column()
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .with_child(Padding::new(
+                    (5., 0., 0., 5.),
+                    Container::new(
+                        Flex::column()
+                            .cross_axis_alignment(CrossAxisAlignment::Start)
+                            .with_child(Label::new(|mail: &Email, _env: &Env| {
+                                format!("From: {}", mail.from)
+                            }))
+                            .with_child(Label::new(|mail: &Email, _env: &Env| {
+                                format!("Subject: {}", mail.subject)
+                            }))
+                            .with_child(Label::new(|mail: &Email, _env: &Env| {
+                                format!(
+                                    "Date: {}",
+                                    NaiveDateTime::from_timestamp(mail.date, 0)
+                                        .format("%Y-%m-%d %H:%M:%S")
+                                        .to_string()
+                                )
+                            })),
+                    )
+                    .background(BACKGROUND_COLOR)
+                    .border(BORDER_COLOR, 1.5)
+                    .rounded(2.),
+                ))
+                .with_child(Padding::new(
+                    (5., 0., 0., 0.),
+                    Container::new(
+                        Scroll::new(
+                            Label::new(|mail: &Email, _env: &Env| format!("{}", mail.body))
+                                .with_line_break_mode(LineBreaking::WordWrap),
+                        )
+                        .vertical(),
+                    )
+                    .background(BACKGROUND_COLOR)
+                    .border(BORDER_COLOR, 1.5)
+                    .rounded(2.),
+                ))
+        })
+        .lens(Thread::messages),
+    )
+    .vertical()
 }
