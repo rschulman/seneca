@@ -2,15 +2,17 @@ use std::sync::Arc;
 use std::thread;
 
 use chrono::NaiveDateTime;
+use config::{Config, File, FileFormat};
+use dirs::config_dir;
 use druid::im::{vector, Vector};
-use druid::widget::{Split, prelude::*};
+use druid::widget::{prelude::*, Split};
 use druid::widget::{
     Container, CrossAxisAlignment, Either, Flex, Label, LineBreaking, List, Padding, Scroll,
-    SizedBox, WidgetExt,
+    WidgetExt,
 };
 use druid::{
-    AppDelegate, AppLauncher, ArcStr, Color, Command, Data, DelegateCtx, FontDescriptor, Handled,
-    Key, Lens, Selector, Target, WindowDesc,
+    AppDelegate, AppLauncher, ArcStr, Color, Command, Data, DelegateCtx, Handled, Key, Lens,
+    Selector, Target, WindowDesc,
 };
 
 mod mail;
@@ -18,7 +20,6 @@ mod ui;
 
 use crate::mail::{Email, Thread};
 
-const MY_CUSTOM_FONT: Key<FontDescriptor> = Key::new("org.linebender.example.my-custom-font");
 const SEARCH_CHANGE: Selector<ArcStr> = Selector::new("search_change");
 const BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.background-color");
 const BORDER_COLOR: Key<Color> = Key::new("org.westwork.seneca.border-color");
@@ -29,6 +30,7 @@ pub struct MailData {
     threads: Vector<Thread>,
     searches: Searches,
     done_loading: bool,
+    db_location: ArcStr,
 }
 
 #[derive(Data, Lens, Clone)]
@@ -52,7 +54,9 @@ impl AppDelegate<MailData> for Delegate {
             data.done_loading = false;
             let event_sink = ctx.get_external_handle();
             let query_clone = query.clone();
-            let _detached_thread = thread::spawn(|| mail::load_mail(query_clone, event_sink));
+            let db_clone = data.db_location.clone();
+            let _detached_thread =
+                thread::spawn(|| mail::load_mail(query_clone, event_sink, db_clone));
             Handled::Yes
         } else {
             Handled::No
@@ -61,6 +65,17 @@ impl AppDelegate<MailData> for Delegate {
 }
 
 fn main() {
+    let mut config_file = config_dir().unwrap();
+    config_file.push("seneca/config.toml");
+    let config_builder = Config::builder().add_source(File::new(
+        config_file
+            .to_str()
+            .expect("Config file path isn't unicode??"),
+        FileFormat::Toml,
+    ));
+
+    let config = config_builder.build().expect("Error reading config file");
+
     let search_mail = MailData {
         threads: Vector::new(),
         searches: Searches {
@@ -71,6 +86,11 @@ fn main() {
             selected: Arc::from("tag:inbox"),
         },
         done_loading: false,
+        db_location: Arc::from(
+            config
+                .get_string("db-location")
+                .expect("No notmuch database in config file."),
+        ),
     };
 
     let main_window = WindowDesc::new(root_widget())
@@ -79,19 +99,37 @@ fn main() {
 
     let launcher = AppLauncher::with_window(main_window);
     let event_sink = launcher.get_external_handle();
+    let db_clone = search_mail.db_location.clone();
 
-    thread::spawn(move || mail::load_mail(Arc::from("tag:inbox"), event_sink));
+    thread::spawn(move || mail::load_mail(Arc::from("tag:inbox"), event_sink, db_clone));
 
     launcher
         .log_to_console()
         .delegate(Delegate {})
-        .configure_env(|env: &mut Env, _app: &MailData| {
-            env.set(BACKGROUND_COLOR, Color::grey(0.95));
-            env.set(BORDER_COLOR, Color::WHITE);
-            env.set(SEARCH_BACKGROUND_COLOR, Color::rgb8(55, 65, 64));
+        .configure_env(move |env: &mut Env, _app: &MailData| {
+            env.set(
+                BACKGROUND_COLOR,
+                get_color_from_config("thread-background-color", &config),
+            );
+            env.set(BORDER_COLOR, get_color_from_config("border-color", &config));
+            env.set(
+                SEARCH_BACKGROUND_COLOR,
+                get_color_from_config("search-background-color", &config),
+            );
         })
         .launch(search_mail)
         .expect("Failed to launch Seneca");
+}
+
+fn get_color_from_config(key: &str, config: &Config) -> Color {
+    let color_table = config
+        .get_table(key)
+        .expect("No color theme found in config file.");
+    Color::rgb8(
+        color_table.get("r").unwrap().clone().into_int().unwrap() as u8,
+        color_table.get("g").unwrap().clone().into_int().unwrap() as u8,
+        color_table.get("b").unwrap().clone().into_int().unwrap() as u8,
+    )
 }
 
 fn root_widget() -> impl Widget<MailData> {
@@ -99,13 +137,16 @@ fn root_widget() -> impl Widget<MailData> {
     let thread_widget = ui::thread_list::thread_list();
     let loading_widget = Label::new("Loading...").center();
 
-    Split::columns(Container::new(Scroll::new(search_sidebar).vertical())
-                .background(SEARCH_BACKGROUND_COLOR),
-            Either::new(
-                |data, _env| data.done_loading,
-                thread_widget,
-                loading_widget,
-            )).split_point(0.2).bar_size(2.0)
+    Split::columns(
+        Container::new(Scroll::new(search_sidebar).vertical()).background(SEARCH_BACKGROUND_COLOR),
+        Either::new(
+            |data, _env| data.done_loading,
+            thread_widget,
+            loading_widget,
+        ),
+    )
+    .split_point(0.2)
+    .bar_size(2.0)
 }
 
 fn mail_layout() -> impl Widget<Thread> {

@@ -1,12 +1,10 @@
-use std::path::PathBuf;
-use std::sync::mpsc::{Receiver, Sender};
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::NaiveDateTime;
 use druid::im::{vector, Vector};
-use druid::platform_menus::mac::file::print;
 use druid::{ArcStr, Data, Lens};
-use home::home_dir;
 use notmuch::{Database, DatabaseMode};
 
 use crate::MailData;
@@ -31,15 +29,9 @@ pub struct Thread {
     pub id: String,
 }
 
-pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink) {
-    let mut mail_path = home_dir().unwrap();
-    mail_path.push("Personal");
-    mail_path.push(".mail");
-    let db = Database::open(
-        &"/home/ross/Personal/.mail/".to_string(),
-        DatabaseMode::ReadWrite,
-    )
-    .unwrap();
+pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: ArcStr) {
+    let db_osstr: OsString = db_location.to_string().into();
+    let db = Database::open(Path::new(&db_osstr), DatabaseMode::ReadWrite).unwrap();
     let inbox = db.create_query(&query).unwrap();
     let mut threads = inbox.search_threads().unwrap();
     println!("Loading threads...");
