@@ -2,12 +2,15 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use chrono::{DateTime, Local, TimeZone};
+use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use druid::im::Vector;
-use druid::{ArcStr, Data, Lens};
+use druid::widget::{
+    Container, CrossAxisAlignment, Flex, Label, LineBreaking, List, Padding, Scroll,
+};
+use druid::{ArcStr, Data, Env, Lens, Widget, WidgetExt};
 use notmuch::{Database, DatabaseMode};
 
-use crate::MailData;
+use crate::{MailData, BACKGROUND_COLOR, BORDER_COLOR};
 
 #[derive(Data, Lens, Clone)]
 pub struct Email {
@@ -56,4 +59,52 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
         app_data.done_loading = true;
     });
     println!("Done!");
+}
+
+pub fn mail_layout() -> impl Widget<Thread> {
+    Scroll::new(
+        List::new(|| {
+            Flex::column()
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .with_child(Padding::new(
+                    (5., 0., 0., 5.),
+                    Container::new(
+                        Flex::column()
+                            .cross_axis_alignment(CrossAxisAlignment::Start)
+                            .with_child(Label::new(|mail: &Email, _env: &Env| {
+                                format!("From: {}", mail.from)
+                            }))
+                            .with_child(Label::new(|mail: &Email, _env: &Env| {
+                                format!("Subject: {}", mail.subject)
+                            }))
+                            .with_child(Label::new(|mail: &Email, _env: &Env| {
+                                format!(
+                                    "Date: {}",
+                                    NaiveDateTime::from_timestamp(mail.date, 0)
+                                        .format("%Y-%m-%d %H:%M:%S")
+                                        .to_string()
+                                )
+                            })),
+                    )
+                    .background(BACKGROUND_COLOR)
+                    .border(BORDER_COLOR, 1.5)
+                    .rounded(2.),
+                ))
+                .with_child(Padding::new(
+                    (5., 0., 0., 0.),
+                    Container::new(
+                        Scroll::new(
+                            Label::new(|mail: &Email, _env: &Env| format!("{}", mail.body))
+                                .with_line_break_mode(LineBreaking::WordWrap),
+                        )
+                        .vertical(),
+                    )
+                    .background(BACKGROUND_COLOR)
+                    .border(BORDER_COLOR, 1.5)
+                    .rounded(2.),
+                ))
+        })
+        .lens(Thread::messages),
+    )
+    .vertical()
 }

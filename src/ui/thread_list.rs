@@ -115,7 +115,7 @@ fn spawn_thread_window(ctx: &mut EventCtx, data: &mut Thread, env: &Env) {
         });
     }
 
-    let mail_list = crate::mail_layout();
+    let mail_list = crate::mail::mail_layout();
     ctx.new_sub_window(
         WindowConfig::default()
             .window_size(Size::new(700., 600.))
