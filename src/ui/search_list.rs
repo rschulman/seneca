@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use druid::widget::{Container, Label, List, Padding, Painter, Widget};
 use druid::{
-    lens, ArcStr, Color, Data, Insets, Lens, LensExt, LinearGradient, RenderContext, UnitPoint,
+    lens, ArcStr, Data, Insets, LensExt, LinearGradient, RenderContext, UnitPoint,
     WidgetExt,
 };
 

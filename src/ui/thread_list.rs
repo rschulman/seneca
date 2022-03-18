@@ -1,11 +1,8 @@
-use std::path::PathBuf;
-use std::sync::Arc;
-
-use crate::{Email, MailData, Thread, ui::virt_list::VirtList, BACKGROUND_COLOR, BORDER_COLOR};
+use crate::{Email, MailData, Thread, ui::virt_list::VirtList, BACKGROUND_COLOR};
 use chrono::Local;
 use druid::im::vector;
-use druid::widget::{prelude::*, Container, FlexParams};
-use druid::widget::{ClipBox, CrossAxisAlignment, Flex, Label, List, Padding, Scroll, WidgetExt};
+use druid::widget::{prelude::*, Container};
+use druid::widget::{CrossAxisAlignment, Flex, Label, WidgetExt};
 use druid::{Color, Insets, Point, Size, TextAlignment, WindowConfig, WindowLevel};
 use itertools::Itertools;
 use mailparse::{dateparse, parse_mail, MailHeaderMap};

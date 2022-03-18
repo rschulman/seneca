@@ -2,8 +2,8 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use chrono::{DateTime, NaiveDateTime, Local, TimeZone};
-use druid::im::{vector, Vector};
+use chrono::{DateTime, Local, TimeZone};
+use druid::im::Vector;
 use druid::{ArcStr, Data, Lens};
 use notmuch::{Database, DatabaseMode};
 
