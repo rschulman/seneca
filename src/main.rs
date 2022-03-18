@@ -147,7 +147,7 @@ fn main() {
 fn get_color_from_config(key: &str, config: &Config) -> Color {
     let color_table = config
         .get_table(key)
-        .expect("No color theme found in config file.");
+        .expect(&format!("No color theme found in config file. Missing key: {}.", key));
     Color::rgb8(
         color_table.get("r").unwrap().clone().into_int().unwrap() as u8,
         color_table.get("g").unwrap().clone().into_int().unwrap() as u8,
