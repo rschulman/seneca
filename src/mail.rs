@@ -2,7 +2,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Local, TimeZone};
 use druid::im::{vector, Vector};
 use druid::{ArcStr, Data, Lens};
 use notmuch::{Database, DatabaseMode};
@@ -22,7 +22,7 @@ pub struct Email {
 #[derive(Clone, Data, Lens)]
 pub struct Thread {
     pub authors: Vector<String>,
-    pub date: String,
+    pub date: Arc<DateTime<Local>>,
     pub subject: String,
     pub message_paths: Vector<Arc<PathBuf>>,
     pub messages: Vector<Email>,
@@ -40,9 +40,7 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
     for thread in threads.by_ref() {
         thread_tracker.push_back(Thread {
             authors: thread.authors().clone().into(),
-            date: NaiveDateTime::from_timestamp(thread.newest_date(), 0)
-                .format("%Y-%m-%d %H:%M:%S")
-                .to_string(),
+            date: Arc::new(Local.timestamp(thread.newest_date(), 0)),
             subject: thread.subject().clone().into(),
             message_paths: thread
                 .messages()

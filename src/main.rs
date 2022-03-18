@@ -11,8 +11,8 @@ use druid::widget::{
     WidgetExt,
 };
 use druid::{
-    AppDelegate, AppLauncher, ArcStr, Color, Command, Data, DelegateCtx, Handled, Key, Lens,
-    Selector, Target, WindowDesc,
+    AppDelegate, AppLauncher, ArcStr, Color, Command, Data, DelegateCtx, FontDescriptor,
+    FontFamily, FontWeight, Handled, Key, Lens, Selector, Target, WindowDesc,
 };
 
 mod mail;
@@ -21,9 +21,13 @@ mod ui;
 use crate::mail::{Email, Thread};
 
 const SEARCH_CHANGE: Selector<ArcStr> = Selector::new("search_change");
+const UI_FONT: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font");
+const UI_FONT_LARGE: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font-large");
+const UI_FONT_LIGHT: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font-light");
 const BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.background-color");
 const BORDER_COLOR: Key<Color> = Key::new("org.westwork.seneca.border-color");
 const SEARCH_BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.search-background-color");
+const SEARCH_SELECTED_COLOR: Key<Color> = Key::new("org.westwork.seneca.search-body-color");
 
 #[derive(Data, Lens, Clone)]
 pub struct MailData {
@@ -75,15 +79,16 @@ fn main() {
     ));
 
     let config = config_builder.build().expect("Error reading config file");
+    let selected_search = Arc::from("tag:inbox");
 
     let search_mail = MailData {
         threads: Vector::new(),
         searches: Searches {
             search_list: vector![
-                (Arc::from("Inbox"), Arc::from("tag:inbox")),
+                (Arc::from("Inbox"), Arc::clone(&selected_search)),
                 (Arc::from("Github"), Arc::from("tag:github"))
             ],
-            selected: Arc::from("tag:inbox"),
+            selected: selected_search,
         },
         done_loading: false,
         db_location: Arc::from(
@@ -115,6 +120,24 @@ fn main() {
             env.set(
                 SEARCH_BACKGROUND_COLOR,
                 get_color_from_config("search-background-color", &config),
+            );
+            env.set(
+                SEARCH_SELECTED_COLOR,
+                get_color_from_config("search-selected-color", &config),
+            );
+            env.set(
+                UI_FONT,
+                FontDescriptor::new(FontFamily::SYSTEM_UI).with_size(13.0),
+            );
+            env.set(
+                UI_FONT_LARGE,
+                FontDescriptor::new(FontFamily::SYSTEM_UI).with_size(22.0),
+            );
+            env.set(
+                UI_FONT_LIGHT,
+                FontDescriptor::new(FontFamily::SYSTEM_UI)
+                    .with_size(13.0)
+                    .with_weight(FontWeight::LIGHT),
             );
         })
         .launch(search_mail)
