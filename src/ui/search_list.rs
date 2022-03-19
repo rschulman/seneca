@@ -18,6 +18,7 @@ pub fn search_sidebar() -> impl Widget<MailData> {
                     Insets::new(6., 0., 0., 0.),
                     Label::dynamic(|data: &(ArcStr, (ArcStr, ArcStr)), _| data.1 .0.to_string())
                         .with_font(crate::UI_FONT_LARGE)
+                        .with_text_color(druid::Color::WHITE)
                         .on_click(|ctx, data: &mut (ArcStr, (ArcStr, ArcStr)), _env| {
                             data.0 = data.1 .1.clone();
                             ctx.submit_command(SEARCH_CHANGE.with(data.0.clone()));

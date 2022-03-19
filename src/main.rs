@@ -6,10 +6,7 @@ use config::{Config, File, FileFormat};
 use dirs::config_dir;
 use druid::im::{vector, Vector};
 use druid::widget::{prelude::*, Split};
-use druid::widget::{
-    Container, CrossAxisAlignment, Either, Flex, Label, LineBreaking, List, Padding, Scroll,
-    WidgetExt,
-};
+use druid::widget::{Container, Either, Label, Maybe, Scroll, WidgetExt};
 use druid::{
     AppDelegate, AppLauncher, ArcStr, Color, Command, Data, DelegateCtx, FontDescriptor,
     FontFamily, FontWeight, Handled, Key, Lens, Selector, Target, WindowDesc,
@@ -20,11 +17,12 @@ mod ui;
 
 use crate::mail::{Email, Thread};
 
-const SEARCH_CHANGE: Selector<ArcStr> = Selector::new("search_change");
+const SEARCH_CHANGE: Selector<ArcStr> = Selector::new("search-change");
+const LOAD_THREAD: Selector<Thread> = Selector::new("load-thread");
 const UI_FONT: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font");
 const UI_FONT_LARGE: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font-large");
 const UI_FONT_LIGHT: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font-light");
-const BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.background-color");
+const THREAD_BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.background-color");
 const BORDER_COLOR: Key<Color> = Key::new("org.westwork.seneca.border-color");
 const SEARCH_BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.search-background-color");
 const SEARCH_SELECTED_COLOR: Key<Color> = Key::new("org.westwork.seneca.search-body-color");
@@ -35,6 +33,7 @@ pub struct MailData {
     searches: Searches,
     done_loading: bool,
     db_location: ArcStr,
+    loaded_thread: Option<Thread>,
 }
 
 #[derive(Data, Lens, Clone)]
@@ -61,10 +60,16 @@ impl AppDelegate<MailData> for Delegate {
             let db_clone = data.db_location.clone();
             let _detached_thread =
                 thread::spawn(|| mail::load_mail(query_clone, event_sink, db_clone));
-            Handled::Yes
-        } else {
-            Handled::No
+            return Handled::Yes;
         }
+
+        if let Some(thread) = cmd.get(LOAD_THREAD) {
+            let mut new_thread = thread.clone();
+            mail::load_thread_from_disk(&mut new_thread);
+            data.loaded_thread = Some(new_thread);
+            return Handled::Yes;
+        }
+        Handled::No
     }
 }
 
@@ -96,6 +101,7 @@ fn main() {
                 .get_string("db-location")
                 .expect("No notmuch database in config file."),
         ),
+        loaded_thread: None,
     };
 
     let main_window = WindowDesc::new(root_widget())
@@ -113,7 +119,7 @@ fn main() {
         .delegate(Delegate {})
         .configure_env(move |env: &mut Env, _app: &MailData| {
             env.set(
-                BACKGROUND_COLOR,
+                THREAD_BACKGROUND_COLOR,
                 get_color_from_config("thread-background-color", &config),
             );
             env.set(BORDER_COLOR, get_color_from_config("border-color", &config));
@@ -139,15 +145,17 @@ fn main() {
                     .with_size(13.0)
                     .with_weight(FontWeight::LIGHT),
             );
+            env.set(druid::theme::TEXT_COLOR, Color::BLACK);
         })
         .launch(search_mail)
         .expect("Failed to launch Seneca");
 }
 
 fn get_color_from_config(key: &str, config: &Config) -> Color {
-    let color_table = config
-        .get_table(key)
-        .expect(&format!("No color theme found in config file. Missing key: {}.", key));
+    let color_table = config.get_table(key).expect(&format!(
+        "No color theme found in config file. Missing key: {}.",
+        key
+    ));
     Color::rgb8(
         color_table.get("r").unwrap().clone().into_int().unwrap() as u8,
         color_table.get("g").unwrap().clone().into_int().unwrap() as u8,
@@ -162,11 +170,15 @@ fn root_widget() -> impl Widget<MailData> {
 
     Split::columns(
         Container::new(Scroll::new(search_sidebar).vertical()).background(SEARCH_BACKGROUND_COLOR),
-        Either::new(
-            |data, _env| data.done_loading,
-            thread_widget,
-            loading_widget,
-        ),
+        Split::columns(
+            Either::new(
+                |data, _env| data.done_loading,
+                thread_widget,
+                loading_widget,
+            ),
+            Maybe::or_empty(|| mail::mail_layout()).lens(MailData::loaded_thread),
+        )
+        .split_point(0.3),
     )
     .split_point(0.2)
     .bar_size(2.0)

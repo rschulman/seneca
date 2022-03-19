@@ -3,14 +3,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
-use druid::im::Vector;
+use druid::im::{Vector, vector};
 use druid::widget::{
     Container, CrossAxisAlignment, Flex, Label, LineBreaking, List, Padding, Scroll,
 };
 use druid::{ArcStr, Data, Env, Lens, Widget, WidgetExt};
+use mailparse::{MailHeaderMap, dateparse, parse_mail};
 use notmuch::{Database, DatabaseMode};
 
-use crate::{MailData, BACKGROUND_COLOR, BORDER_COLOR};
+use crate::{MailData, THREAD_BACKGROUND_COLOR, BORDER_COLOR};
 
 #[derive(Data, Lens, Clone)]
 pub struct Email {
@@ -61,6 +62,52 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
     println!("Done!");
 }
 
+pub fn load_thread_from_disk(data: &mut Thread) {
+    println!("This thread has {} emails.", data.message_paths.len());
+    for mail in data.message_paths.clone() {
+        println!("Processing {:?}", mail);
+        let raw = std::fs::read_to_string(&*mail).unwrap_or_default();
+        let parsed = parse_mail(raw.as_bytes()).unwrap();
+        data.messages.push_back(Email {
+            body: if parsed.ctype.mimetype.contains("multipart") {
+                let mut body_temp = "Multipart!".to_string();
+                for part in parsed.subparts {
+                    if part.ctype.mimetype.contains("plain") {
+                        body_temp = part.get_body().unwrap_or_default();
+                    }
+                }
+                body_temp
+            } else {
+                parsed.get_body().unwrap_or_default()
+            },
+            subject: parsed
+                .headers
+                .get_first_value("Subject")
+                .unwrap_or_default(),
+            date: dateparse(
+                parsed
+                    .headers
+                    .get_first_value("Date")
+                    .unwrap()
+                    .as_str(),
+            )
+            .unwrap(),
+            to: parsed
+                .headers
+                .get_first_value("To")
+                .unwrap_or_default(),
+            from: parsed
+                .headers
+                .get_first_value("From")
+                .unwrap_or_default(),
+            cc: vector![parsed
+                .headers
+                .get_first_value("Cc")
+                .unwrap_or_default()],
+        });
+    }
+}
+
 pub fn mail_layout() -> impl Widget<Thread> {
     Scroll::new(
         List::new(|| {
@@ -86,7 +133,7 @@ pub fn mail_layout() -> impl Widget<Thread> {
                                 )
                             })),
                     )
-                    .background(BACKGROUND_COLOR)
+                    .background(THREAD_BACKGROUND_COLOR)
                     .border(BORDER_COLOR, 1.5)
                     .rounded(2.),
                 ))
@@ -99,7 +146,7 @@ pub fn mail_layout() -> impl Widget<Thread> {
                         )
                         .vertical(),
                     )
-                    .background(BACKGROUND_COLOR)
+                    .background(THREAD_BACKGROUND_COLOR)
                     .border(BORDER_COLOR, 1.5)
                     .rounded(2.),
                 ))
