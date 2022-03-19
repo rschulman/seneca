@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::thread;
 
-use chrono::NaiveDateTime;
 use config::{Config, File, FileFormat};
 use dirs::config_dir;
 use druid::im::{vector, Vector};
@@ -15,7 +14,7 @@ use druid::{
 mod mail;
 mod ui;
 
-use crate::mail::{Email, Thread};
+use crate::mail::Thread;
 
 const SEARCH_CHANGE: Selector<ArcStr> = Selector::new("search-change");
 const LOAD_THREAD: Selector<Thread> = Selector::new("load-thread");
