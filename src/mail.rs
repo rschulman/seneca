@@ -31,6 +31,7 @@ pub struct Thread {
     pub message_paths: Vector<Arc<PathBuf>>,
     pub messages: Vector<Email>,
     pub id: String,
+    pub tags: Vector<String>
 }
 
 pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: ArcStr) {
@@ -52,6 +53,7 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
                 .collect::<Vector<Arc<PathBuf>>>(),
             messages: Vector::new(),
             id: thread.id().into(),
+            tags: thread.tags().collect()
         });
     }
     event_sink.add_idle_callback(|app_data: &mut MailData| {
