@@ -63,9 +63,7 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
 }
 
 pub fn load_thread_from_disk(data: &mut Thread) {
-    println!("This thread has {} emails.", data.message_paths.len());
     for mail in data.message_paths.clone() {
-        println!("Processing {:?}", mail);
         let raw = std::fs::read_to_string(&*mail).unwrap_or_default();
         let parsed = parse_mail(raw.as_bytes()).unwrap();
         data.messages.push_back(Email {
