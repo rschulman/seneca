@@ -180,6 +180,6 @@ fn root_widget() -> impl Widget<MailData> {
         )
         .split_point(0.3),
     )
-    .split_point(0.2)
+    .split_point(0.15)
     .bar_size(2.0)
 }
