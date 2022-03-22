@@ -2,10 +2,9 @@ use crate::{ui::virt_list::VirtList, MailData, Thread};
 use crate::{LOAD_THREAD, THREAD_BACKGROUND_COLOR, THREAD_SELECTED_COLOR};
 use chrono::Local;
 use druid::kurbo::Circle;
-use druid::widget::{CrossAxisAlignment, Flex, Label, WidgetExt};
+use druid::widget::{CrossAxisAlignment, Flex, Label, LineBreaking, WidgetExt};
 use druid::{
-    Color, Env, Event, LifeCycle, Point, RenderContext, Size, TextAlignment, TimerToken,
-    Widget,
+    Color, Env, Event, LifeCycle, Point, Rect, RenderContext, Size, TextAlignment, TimerToken, Widget,
 };
 use itertools::Itertools;
 
@@ -63,7 +62,7 @@ impl Widget<Thread> for ThreadWidget {
                     Label::new(|mail: &Thread, _env: &Env| mail.authors.iter().join(", "))
                         .with_text_color(Color::BLACK)
                         .with_font(crate::UI_FONT)
-                        .with_text_alignment(TextAlignment::Start),
+                        .with_text_alignment(TextAlignment::Start).with_line_break_mode(LineBreaking::Clip),
                 );
                 self.subject = Some(
                     Label::new(|mail: &Thread, _env: &Env| mail.subject.to_string())
@@ -99,7 +98,6 @@ impl Widget<Thread> for ThreadWidget {
     }
 
     fn update(&mut self, ctx: &mut druid::UpdateCtx, old_data: &Thread, data: &Thread, env: &Env) {
-        println!("New thread!");
         self.senders
             .as_mut()
             .unwrap()
@@ -118,9 +116,16 @@ impl Widget<Thread> for ThreadWidget {
         data: &Thread,
         env: &Env,
     ) -> druid::Size {
-        self.senders.as_mut().unwrap().layout(ctx, bc, data, env);
-        self.subject.as_mut().unwrap().layout(ctx, bc, data, env);
         self.date_size = self.date.as_mut().unwrap().layout(ctx, bc, data, env);
+        let senders_bc = druid::BoxConstraints::new(
+            bc.min().clone(),
+            Size::new(bc.max().width - self.date_size.width, bc.max().height),
+        ); // Clip the senders if they're going to overlap the sent date
+        self.senders
+            .as_mut()
+            .unwrap()
+            .layout(ctx, &senders_bc, data, env);
+        self.subject.as_mut().unwrap().layout(ctx, bc, data, env);
         druid::Size::new(bc.max().width, THREAD_HEIGHT)
     }
 
@@ -134,10 +139,10 @@ impl Widget<Thread> for ThreadWidget {
         };
         ctx.fill(rect, &env.get(bg_color));
 
-        let radius = size.height * 0.1;
+        let radius = THREAD_HEIGHT * 0.1;
         if data.tags.contains(&"unread".to_string()) {
             ctx.fill(
-                Circle::new(Point::new(size.width * 0.05, size.height * 0.5), radius),
+                Circle::new(Point::new(14., size.height * 0.5), radius),
                 &Color::rgb8(20, 217, 235),
             );
         }
@@ -145,12 +150,14 @@ impl Widget<Thread> for ThreadWidget {
         self.senders
             .as_ref()
             .unwrap()
-            .draw_at(ctx, Point::new((radius * 2.) + 10., size.height * 0.2));
+            .draw_at(ctx, Point::new(radius * 4.3, size.height * 0.2));
 
         self.subject
             .as_ref()
             .unwrap()
-            .draw_at(ctx, Point::new((radius * 2.) + 10., size.height * 0.7));
+            .draw_at(ctx, Point::new(radius * 4.3, size.height * 0.5));
+
+        ctx.fill(Rect::new(size.width - self.date_size.width, size.height * 0.2, size.width, (size.height * 0.2) + 15.), &env.get(bg_color));
 
         self.date.as_ref().unwrap().draw_at(
             ctx,
