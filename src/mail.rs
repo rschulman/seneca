@@ -40,7 +40,6 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
     let db = Database::open(Path::new(&db_osstr), DatabaseMode::ReadWrite).unwrap();
     let inbox = db.create_query(&query).unwrap();
     let mut threads = inbox.search_threads().unwrap();
-    println!("Loading threads... {}", query);
     let mut thread_tracker = Vector::new();
 
     for thread in threads.by_ref() {
@@ -59,11 +58,9 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
         });
     }
     event_sink.add_idle_callback(|app_data: &mut MailData| {
-        println!("Pushing threads...");
         app_data.threads = thread_tracker;
         app_data.done_loading = true;
     });
-    println!("Done!");
 }
 
 pub fn load_thread_from_disk(data: &mut Thread) {
