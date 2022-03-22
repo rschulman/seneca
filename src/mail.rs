@@ -3,15 +3,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
-use druid::im::{Vector, vector};
+use druid::im::{vector, Vector};
 use druid::widget::{
     Container, CrossAxisAlignment, Flex, Label, LineBreaking, List, Padding, Scroll,
 };
 use druid::{ArcStr, Data, Env, Lens, Widget, WidgetExt};
-use mailparse::{MailHeaderMap, dateparse, parse_mail};
+use mailparse::{dateparse, parse_mail, MailHeaderMap};
 use notmuch::{Database, DatabaseMode};
 
-use crate::{MailData, THREAD_BACKGROUND_COLOR, BORDER_COLOR};
+use crate::{MailData, BORDER_COLOR, THREAD_BACKGROUND_COLOR};
 
 #[derive(Data, Lens, Clone)]
 pub struct Email {
@@ -31,7 +31,8 @@ pub struct Thread {
     pub message_paths: Vector<Arc<PathBuf>>,
     pub messages: Vector<Email>,
     pub id: String,
-    pub tags: Vector<String>
+    pub tags: Vector<String>,
+    pub viewing: bool,
 }
 
 pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: ArcStr) {
@@ -39,7 +40,7 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
     let db = Database::open(Path::new(&db_osstr), DatabaseMode::ReadWrite).unwrap();
     let inbox = db.create_query(&query).unwrap();
     let mut threads = inbox.search_threads().unwrap();
-    println!("Loading threads...");
+    println!("Loading threads... {}", query);
     let mut thread_tracker = Vector::new();
 
     for thread in threads.by_ref() {
@@ -53,7 +54,8 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
                 .collect::<Vector<Arc<PathBuf>>>(),
             messages: Vector::new(),
             id: thread.id().into(),
-            tags: thread.tags().collect()
+            tags: thread.tags().collect(),
+            viewing: false,
         });
     }
     event_sink.add_idle_callback(|app_data: &mut MailData| {
@@ -84,26 +86,10 @@ pub fn load_thread_from_disk(data: &mut Thread) {
                 .headers
                 .get_first_value("Subject")
                 .unwrap_or_default(),
-            date: dateparse(
-                parsed
-                    .headers
-                    .get_first_value("Date")
-                    .unwrap()
-                    .as_str(),
-            )
-            .unwrap(),
-            to: parsed
-                .headers
-                .get_first_value("To")
-                .unwrap_or_default(),
-            from: parsed
-                .headers
-                .get_first_value("From")
-                .unwrap_or_default(),
-            cc: vector![parsed
-                .headers
-                .get_first_value("Cc")
-                .unwrap_or_default()],
+            date: dateparse(parsed.headers.get_first_value("Date").unwrap().as_str()).unwrap(),
+            to: parsed.headers.get_first_value("To").unwrap_or_default(),
+            from: parsed.headers.get_first_value("From").unwrap_or_default(),
+            cc: vector![parsed.headers.get_first_value("Cc").unwrap_or_default()],
         });
     }
 }

@@ -22,9 +22,10 @@ const UI_FONT: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font");
 const UI_FONT_LARGE: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font-large");
 const UI_FONT_LIGHT: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font-light");
 const THREAD_BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.background-color");
+const THREAD_SELECTED_COLOR: Key<Color> = Key::new("org.westwork.seneca.thread-selected-color");
 const BORDER_COLOR: Key<Color> = Key::new("org.westwork.seneca.border-color");
 const SEARCH_BACKGROUND_COLOR: Key<Color> = Key::new("org.westwork.seneca.search-background-color");
-const SEARCH_SELECTED_COLOR: Key<Color> = Key::new("org.westwork.seneca.search-body-color");
+const SEARCH_SELECTED_COLOR: Key<Color> = Key::new("org.westwork.seneca.search-selected-color");
 
 #[derive(Data, Lens, Clone)]
 pub struct MailData {
@@ -63,8 +64,12 @@ impl AppDelegate<MailData> for Delegate {
         }
 
         if let Some(thread) = cmd.get(LOAD_THREAD) {
+            if data.loaded_thread.is_some() {
+                data.loaded_thread.as_mut().unwrap().viewing = false;
+            }
             let mut new_thread = thread.clone();
             mail::load_thread_from_disk(&mut new_thread);
+            new_thread.viewing = true;
             data.loaded_thread = Some(new_thread);
             return Handled::Yes;
         }
@@ -120,6 +125,10 @@ fn main() {
             env.set(
                 THREAD_BACKGROUND_COLOR,
                 get_color_from_config("thread-background-color", &config),
+            );
+            env.set(
+                THREAD_SELECTED_COLOR,
+                get_color_from_config("thread-selected-color", &config),
             );
             env.set(BORDER_COLOR, get_color_from_config("border-color", &config));
             env.set(
