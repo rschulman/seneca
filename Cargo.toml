@@ -7,12 +7,15 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+august = "^2.4"
 config = "0.12"
 chrono = "*"
 notmuch = "*"
+lazy_static = "1.4.0"
 dirs = "4.0"
 itertools = "0.10.0"
 mailparse = "0.13.2"
+regex = "1.5"
 
 [dependencies.druid]
 git = "https://github.com/rschulman/druid.git"

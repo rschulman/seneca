@@ -201,7 +201,8 @@ fn root_widget() -> impl Widget<MailData> {
             ),
             Maybe::or_empty(|| mail::mail_layout()).lens(MailData::loaded_thread),
         )
-        .split_point(0.3),
+        .split_point(0.3)
+        .bar_size(0.3),
     )
     .split_point(0.15)
     .bar_size(2.0)
