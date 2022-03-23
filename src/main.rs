@@ -1,3 +1,5 @@
+use std::ffi::OsString;
+use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 
@@ -10,6 +12,7 @@ use druid::{
     AppDelegate, AppLauncher, ArcStr, Color, Command, Data, DelegateCtx, FontDescriptor,
     FontFamily, FontWeight, Handled, Key, Lens, Selector, Target, WindowDesc,
 };
+use notmuch::{Database, DatabaseMode};
 
 mod mail;
 mod ui;
@@ -17,7 +20,8 @@ mod ui;
 use crate::mail::Thread;
 
 const SEARCH_CHANGE: Selector<ArcStr> = Selector::new("search-change");
-const LOAD_THREAD: Selector<Thread> = Selector::new("load-thread");
+const LOAD_THREAD: Selector<Arc<Thread>> = Selector::new("load-thread");
+const MARK_READ: Selector<Arc<Thread>> = Selector::new("mark-read");
 const UI_FONT: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font");
 const UI_FONT_LARGE: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font-large");
 const UI_FONT_LIGHT: Key<FontDescriptor> = Key::new("org.westwork.seneca.ui-font-light");
@@ -29,11 +33,10 @@ const SEARCH_SELECTED_COLOR: Key<Color> = Key::new("org.westwork.seneca.search-s
 
 #[derive(Data, Lens, Clone)]
 pub struct MailData {
-    threads: Vector<Thread>,
+    threads: Vector<Arc<Thread>>,
     searches: Searches,
     done_loading: bool,
-    db_location: ArcStr,
-    loaded_thread: Option<Thread>,
+    loaded_thread: Option<Arc<Thread>>,
 }
 
 #[derive(Data, Lens, Clone)]
@@ -42,7 +45,9 @@ pub struct Searches {
     selected: ArcStr,
 }
 
-struct Delegate;
+struct Delegate {
+    database: OsString,
+}
 
 impl AppDelegate<MailData> for Delegate {
     fn command(
@@ -57,22 +62,31 @@ impl AppDelegate<MailData> for Delegate {
             data.done_loading = false;
             let event_sink = ctx.get_external_handle();
             let query_clone = query.clone();
-            let db_clone = data.db_location.clone();
+            let db_loc = self.database.clone();
             let _detached_thread =
-                thread::spawn(|| mail::load_mail(query_clone, event_sink, db_clone));
+                thread::spawn(move || mail::load_mail(query_clone, event_sink, &db_loc));
             return Handled::Yes;
         }
 
-        if let Some(thread) = cmd.get(LOAD_THREAD) {
-            if data.loaded_thread.is_some() {
-                data.loaded_thread.as_mut().unwrap().viewing = false;
-            }
-            let mut new_thread = thread.clone();
-            mail::load_thread_from_disk(&mut new_thread);
-            new_thread.viewing = true;
-            data.loaded_thread = Some(new_thread);
+        if let Some(mut to_load) = cmd.get(LOAD_THREAD) {
+            let loading_thread = mail::load_thread_from_disk(to_load.clone());
+            to_load = &loading_thread.clone();
+            data.loaded_thread = Some(loading_thread.clone());
             return Handled::Yes;
         }
+
+        if let Some(to_mark) = cmd.get(MARK_READ) {
+            let db = Database::open(Path::new(&self.database), DatabaseMode::ReadWrite).unwrap();
+            let nm_messages = db
+                .create_query(&format!("thread:{}", to_mark.id))
+                .unwrap()
+                .search_messages()
+                .unwrap();
+            for message in nm_messages {
+                message.remove_tag("unread").unwrap();
+            }
+        }
+
         Handled::No
     }
 }
@@ -100,11 +114,6 @@ fn main() {
             selected: selected_search,
         },
         done_loading: false,
-        db_location: Arc::from(
-            config
-                .get_string("db-location")
-                .expect("No notmuch database in config file."),
-        ),
         loaded_thread: None,
     };
 
@@ -112,15 +121,21 @@ fn main() {
         .title("Seneca")
         .window_size((1000.0, 500.0));
 
+    let db_osstr: OsString = config
+        .get_string("db-location")
+        .expect("No notmuch database in config file.")
+        .to_string()
+        .into();
+
     let launcher = AppLauncher::with_window(main_window);
     let event_sink = launcher.get_external_handle();
-    let db_clone = search_mail.db_location.clone();
+    let db_clone = db_osstr.clone();
 
-    thread::spawn(move || mail::load_mail(Arc::from("tag:inbox"), event_sink, db_clone));
+    thread::spawn(move || mail::load_mail(Arc::from("tag:inbox"), event_sink, &db_clone));
 
     launcher
         .log_to_console()
-        .delegate(Delegate {})
+        .delegate(Delegate { database: db_osstr })
         .configure_env(move |env: &mut Env, _app: &MailData| {
             env.set(
                 THREAD_BACKGROUND_COLOR,

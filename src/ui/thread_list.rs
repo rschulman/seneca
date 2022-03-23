@@ -1,10 +1,14 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use crate::{ui::virt_list::VirtList, MailData, Thread};
-use crate::{LOAD_THREAD, THREAD_BACKGROUND_COLOR, THREAD_SELECTED_COLOR};
+use crate::{LOAD_THREAD, MARK_READ, THREAD_BACKGROUND_COLOR, THREAD_SELECTED_COLOR};
 use chrono::Local;
 use druid::kurbo::Circle;
 use druid::widget::{CrossAxisAlignment, Flex, Label, LineBreaking, WidgetExt};
 use druid::{
-    Color, Env, Event, LifeCycle, Point, Rect, RenderContext, Size, TextAlignment, TimerToken, Widget,
+    lens, Color, Env, Event, LifeCycle, MouseButton, Point, Rect, RenderContext, Size,
+    TextAlignment, TimerToken, Widget,
 };
 use itertools::Itertools;
 
@@ -30,19 +34,34 @@ impl ThreadWidget {
     }
 }
 
-impl Widget<Thread> for ThreadWidget {
+impl Widget<(Option<Arc<Thread>>, Arc<Thread>)> for ThreadWidget {
     fn event(
         &mut self,
-        _ctx: &mut druid::EventCtx,
+        ctx: &mut druid::EventCtx,
         event: &druid::Event,
-        data: &mut Thread,
+        data: &mut (Option<Arc<Thread>>, Arc<Thread>),
         _env: &Env,
     ) {
         match event {
             Event::Timer(id) => {
                 // Check if the timer in question is for us, and that this thread is still being viewed
-                if *id == self.timer_id && data.viewing {
-                    data.tags.retain(|item| item != &"unread".to_string()); // If so, remove the "unread" tag
+                if *id == self.timer_id
+                    && data.0.is_some()
+                    && data.0.as_ref().unwrap().id == data.1.id
+                {
+                    // If so, remove the "unread" tag
+                    ctx.submit_command(MARK_READ.with(data.1.clone()));
+                    let mut new_thread = (*data.1).clone().to_owned();
+                    new_thread.tags.retain(|item| item != &"unread".to_string());
+                    data.1 = Arc::new(new_thread);
+                    ctx.request_paint();
+                }
+            }
+            Event::MouseUp(evt) => {
+                if evt.button == MouseButton::Left {
+                    ctx.submit_command(LOAD_THREAD.with(data.1.clone()));
+                    self.timer_id = ctx.request_timer(Duration::from_secs(2));
+                    ctx.request_paint();
                 }
             }
             _ => (),
@@ -53,7 +72,7 @@ impl Widget<Thread> for ThreadWidget {
         &mut self,
         ctx: &mut druid::LifeCycleCtx,
         event: &druid::LifeCycle,
-        data: &Thread,
+        data: &(Option<Arc<Thread>>, Arc<Thread>),
         env: &Env,
     ) {
         match event {
@@ -62,7 +81,8 @@ impl Widget<Thread> for ThreadWidget {
                     Label::new(|mail: &Thread, _env: &Env| mail.authors.iter().join(", "))
                         .with_text_color(Color::BLACK)
                         .with_font(crate::UI_FONT)
-                        .with_text_alignment(TextAlignment::Start).with_line_break_mode(LineBreaking::Clip),
+                        .with_text_alignment(TextAlignment::Start)
+                        .with_line_break_mode(LineBreaking::Clip),
                 );
                 self.subject = Some(
                     Label::new(|mail: &Thread, _env: &Env| mail.subject.to_string())
@@ -86,37 +106,49 @@ impl Widget<Thread> for ThreadWidget {
                 self.senders
                     .as_mut()
                     .unwrap()
-                    .lifecycle(ctx, event, data, env);
+                    .lifecycle(ctx, event, &data.1, env);
                 self.subject
                     .as_mut()
                     .unwrap()
-                    .lifecycle(ctx, event, data, env);
-                self.date.as_mut().unwrap().lifecycle(ctx, event, data, env);
+                    .lifecycle(ctx, event, &data.1, env);
+                self.date
+                    .as_mut()
+                    .unwrap()
+                    .lifecycle(ctx, event, &data.1, env);
             }
             _ => {}
         }
     }
 
-    fn update(&mut self, ctx: &mut druid::UpdateCtx, old_data: &Thread, data: &Thread, env: &Env) {
+    fn update(
+        &mut self,
+        ctx: &mut druid::UpdateCtx,
+        old_data: &(Option<Arc<Thread>>, Arc<Thread>),
+        data: &(Option<Arc<Thread>>, Arc<Thread>),
+        env: &Env,
+    ) {
         self.senders
             .as_mut()
             .unwrap()
-            .update(ctx, old_data, data, env);
+            .update(ctx, &old_data.1, &data.1, env);
         self.subject
             .as_mut()
             .unwrap()
-            .update(ctx, old_data, data, env);
-        self.date.as_mut().unwrap().update(ctx, old_data, data, env);
+            .update(ctx, &old_data.1, &data.1, env);
+        self.date
+            .as_mut()
+            .unwrap()
+            .update(ctx, &old_data.1, &data.1, env);
     }
 
     fn layout(
         &mut self,
         ctx: &mut druid::LayoutCtx,
         bc: &druid::BoxConstraints,
-        data: &Thread,
+        data: &(Option<Arc<Thread>>, Arc<Thread>),
         env: &Env,
     ) -> druid::Size {
-        self.date_size = self.date.as_mut().unwrap().layout(ctx, bc, data, env);
+        self.date_size = self.date.as_mut().unwrap().layout(ctx, bc, &data.1, env);
         let senders_bc = druid::BoxConstraints::new(
             bc.min().clone(),
             Size::new(bc.max().width - self.date_size.width, bc.max().height),
@@ -124,15 +156,20 @@ impl Widget<Thread> for ThreadWidget {
         self.senders
             .as_mut()
             .unwrap()
-            .layout(ctx, &senders_bc, data, env);
-        self.subject.as_mut().unwrap().layout(ctx, bc, data, env);
+            .layout(ctx, &senders_bc, &data.1, env);
+        self.subject.as_mut().unwrap().layout(ctx, bc, &data.1, env);
         druid::Size::new(bc.max().width, THREAD_HEIGHT)
     }
 
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &Thread, env: &Env) {
+    fn paint(
+        &mut self,
+        ctx: &mut druid::PaintCtx,
+        data: &(Option<Arc<Thread>>, Arc<Thread>),
+        env: &Env,
+    ) {
         let size = ctx.size();
         let rect = size.to_rect();
-        let bg_color = if data.viewing {
+        let bg_color = if data.0.is_some() && data.0.as_ref().unwrap().id == data.1.id {
             &THREAD_SELECTED_COLOR
         } else {
             &THREAD_BACKGROUND_COLOR
@@ -140,7 +177,7 @@ impl Widget<Thread> for ThreadWidget {
         ctx.fill(rect, &env.get(bg_color));
 
         let radius = THREAD_HEIGHT * 0.1;
-        if data.tags.contains(&"unread".to_string()) {
+        if data.1.tags.contains(&"unread".to_string()) {
             ctx.fill(
                 Circle::new(Point::new(14., size.height * 0.5), radius),
                 &Color::rgb8(20, 217, 235),
@@ -157,7 +194,15 @@ impl Widget<Thread> for ThreadWidget {
             .unwrap()
             .draw_at(ctx, Point::new(radius * 4.3, size.height * 0.5));
 
-        ctx.fill(Rect::new(size.width - self.date_size.width, size.height * 0.2, size.width, (size.height * 0.2) + 15.), &env.get(bg_color));
+        ctx.fill(
+            Rect::new(
+                size.width - self.date_size.width,
+                size.height * 0.2,
+                size.width,
+                (size.height * 0.2) + 15.,
+            ),
+            &env.get(bg_color),
+        );
 
         self.date.as_ref().unwrap().draw_at(
             ctx,
@@ -167,10 +212,11 @@ impl Widget<Thread> for ThreadWidget {
 }
 
 pub fn thread_list() -> impl Widget<MailData> {
+    let widget_lens = (lens!(MailData, loaded_thread), lens!(MailData, threads));
     Flex::column()
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .with_flex_child(
-            VirtList::vertical(THREAD_HEIGHT, || ThreadWidget::new()).lens(MailData::threads),
+            VirtList::vertical(THREAD_HEIGHT, || ThreadWidget::new()).lens(widget_lens),
             1.0,
         )
         .padding(0.5)

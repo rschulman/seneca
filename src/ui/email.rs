@@ -4,19 +4,16 @@ use druid::{
     RenderContext,
 };
 use druid::{Color, Data, Size, Widget};
-use mailparse::{parse_mail, MailHeaderMap};
 
-#[derive(Clone, Data)]
-pub struct Email {
-    raw: String,
-}
+use crate::mail::{Thread, Email};
+use crate::MailData;
 
-impl Widget<Email> for Email {
+impl Widget<MailData> for Email {
     fn event(
         &mut self,
         ctx: &mut druid::EventCtx,
         event: &druid::Event,
-        data: &mut Email,
+        data: &mut MailData,
         env: &druid::Env,
     ) {
     }
@@ -25,7 +22,7 @@ impl Widget<Email> for Email {
         &mut self,
         ctx: &mut druid::LifeCycleCtx,
         event: &druid::LifeCycle,
-        data: &Email,
+        data: &MailData,
         env: &druid::Env,
     ) {
     }
@@ -33,8 +30,8 @@ impl Widget<Email> for Email {
     fn update(
         &mut self,
         ctx: &mut druid::UpdateCtx,
-        old_data: &Email,
-        data: &Email,
+        old_data: &MailData,
+        data: &MailData,
         env: &druid::Env,
     ) {
     }
@@ -43,7 +40,7 @@ impl Widget<Email> for Email {
         &mut self,
         ctx: &mut druid::LayoutCtx,
         bc: &druid::BoxConstraints,
-        data: &Email,
+        data: &MailData,
         env: &druid::Env,
     ) -> Size {
         let size = Size::new(1150., 1500.); // 1150 is roughly 80 characters of 11pt type
@@ -54,7 +51,7 @@ impl Widget<Email> for Email {
         }
     }
 
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &Email, env: &druid::Env) {
+    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &MailData, env: &druid::Env) {
         let size = ctx.size();
         let rect = size.to_rect();
         ctx.fill(rect, &Color::WHITE);

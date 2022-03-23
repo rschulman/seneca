@@ -1,7 +1,6 @@
 use druid::widget::{Container, Label, List, Padding, Painter, Widget};
 use druid::{
-    lens, ArcStr, Data, Insets, LensExt, LinearGradient, RenderContext, UnitPoint,
-    WidgetExt,
+    lens, ArcStr, Data, Insets, LensExt, LinearGradient, RenderContext, UnitPoint, WidgetExt,
 };
 
 use crate::{MailData, Searches, SEARCH_BACKGROUND_COLOR, SEARCH_CHANGE, SEARCH_SELECTED_COLOR};

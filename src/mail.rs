@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use druid::im::{vector, Vector};
+use druid::lens::InArc;
 use druid::widget::{
     Container, CrossAxisAlignment, Flex, Label, LineBreaking, List, Padding, Scroll,
 };
@@ -35,15 +36,14 @@ pub struct Thread {
     pub viewing: bool,
 }
 
-pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: ArcStr) {
-    let db_osstr: OsString = db_location.to_string().into();
-    let db = Database::open(Path::new(&db_osstr), DatabaseMode::ReadWrite).unwrap();
+pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: &OsString) {
+    let db = Database::open(Path::new(db_location), DatabaseMode::ReadWrite).unwrap();
     let inbox = db.create_query(&query).unwrap();
     let mut threads = inbox.search_threads().unwrap();
     let mut thread_tracker = Vector::new();
 
     for thread in threads.by_ref() {
-        thread_tracker.push_back(Thread {
+        thread_tracker.push_back(Arc::new(Thread {
             authors: thread.authors().clone().into(),
             date: Arc::new(Local.timestamp(thread.newest_date(), 0)),
             subject: thread.subject().clone().into(),
@@ -55,7 +55,7 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
             id: thread.id().into(),
             tags: thread.tags().collect(),
             viewing: false,
-        });
+        }));
     }
     event_sink.add_idle_callback(|app_data: &mut MailData| {
         app_data.threads = thread_tracker;
@@ -63,11 +63,12 @@ pub fn load_mail(query: ArcStr, event_sink: druid::ExtEventSink, db_location: Ar
     });
 }
 
-pub fn load_thread_from_disk(data: &mut Thread) {
+pub fn load_thread_from_disk(data: Arc<Thread>) -> Arc<Thread> {
+    let mut new_thread = (*data).clone();
     for mail in data.message_paths.clone() {
         let raw = std::fs::read_to_string(&*mail).unwrap_or_default();
         let parsed = parse_mail(raw.as_bytes()).unwrap();
-        data.messages.push_back(Email {
+        new_thread.messages.push_back(Email {
             body: if parsed.ctype.mimetype.contains("multipart") {
                 let mut body_temp = "Multipart!".to_string();
                 for part in parsed.subparts {
@@ -89,9 +90,11 @@ pub fn load_thread_from_disk(data: &mut Thread) {
             cc: vector![parsed.headers.get_first_value("Cc").unwrap_or_default()],
         });
     }
+
+    Arc::new(new_thread.to_owned())
 }
 
-pub fn mail_layout() -> impl Widget<Thread> {
+pub fn mail_layout() -> impl Widget<Arc<Thread>> {
     Scroll::new(
         List::new(|| {
             Flex::column()
@@ -134,7 +137,7 @@ pub fn mail_layout() -> impl Widget<Thread> {
                     .rounded(2.),
                 ))
         })
-        .lens(Thread::messages),
+        .lens(InArc::new(Thread::messages)),
     )
     .vertical()
 }
