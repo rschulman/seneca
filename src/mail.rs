@@ -146,7 +146,7 @@ pub fn mail_layout() -> impl Widget<Arc<Thread>> {
                     )
                     .expand_width()
                     .background(THREAD_BACKGROUND_COLOR)
-                    .border(BORDER_COLOR, 0.5),
+                    //.border(BORDER_COLOR, 0.5),
                 ))
                 .with_child(Padding::new(
                     (5., 0., 0., 0.),
@@ -161,11 +161,12 @@ pub fn mail_layout() -> impl Widget<Arc<Thread>> {
                     )
                     .expand_width()
                     .background(THREAD_BACKGROUND_COLOR)
-                    .border(BORDER_COLOR, 1.5)
-                    .rounded(2.),
+                    //.border(BORDER_COLOR, 1.5)
+                    //.rounded(2.),
                 ))
         })
         .lens(InArc::new(Thread::messages)),
     )
     .vertical()
+    .border(Color::RED, 0.1)
 }

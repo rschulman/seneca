@@ -169,6 +169,7 @@ fn main() {
                     .with_weight(FontWeight::LIGHT),
             );
             env.set(druid::theme::TEXT_COLOR, Color::BLACK);
+            env.set(druid::theme::WIDGET_PADDING_HORIZONTAL, 1.);
         })
         .launch(search_mail)
         .expect("Failed to launch Seneca");
@@ -192,7 +193,7 @@ fn root_widget() -> impl Widget<MailData> {
     let loading_widget = Label::new("Loading...").center();
 
     Split::columns(
-        Container::new(Scroll::new(search_sidebar).vertical()).background(SEARCH_BACKGROUND_COLOR),
+        Container::new(Scroll::new(search_sidebar).vertical().background(SEARCH_BACKGROUND_COLOR)),
         Split::columns(
             Either::new(
                 |data, _env| data.done_loading,
@@ -202,8 +203,8 @@ fn root_widget() -> impl Widget<MailData> {
             Maybe::or_empty(|| mail::mail_layout()).lens(MailData::loaded_thread),
         )
         .split_point(0.3)
-        .bar_size(0.3),
+        .bar_size(0.0)
     )
     .split_point(0.15)
-    .bar_size(2.0)
+    .bar_size(0.0)
 }
