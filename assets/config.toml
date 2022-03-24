@@ -1,0 +1,7 @@
+db-location = "<path containing your .notmuch directory>"
+
+thread-background-color = {r = 255, g = 255, b = 255}
+thread-selected-color = {r = 168, g = 218, b = 220}
+search-selected-color = {r = 168, g = 218, b = 220}
+border-color = {r = 41, g = 128, b = 185}
+search-background-color = {r = 44, g = 62, b = 80}
